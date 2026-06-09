@@ -7,8 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 import pickle
 
-
-
 app = FastAPI()
 
 app.add_middleware(
@@ -19,10 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 with open("june_games_pgn.pkl", "rb") as file:
     MY_GAMES_LIST = pickle.load(file)
-
 
 
 @app.get("/api/get-challenge")
@@ -44,9 +40,10 @@ def get_challenge():
         # 3. Compile the list of main line moves played in this match
         all_moves = list(game.mainline_moves())
         
+        if not all_moves:
+            return {"error": "The selected game contains no move notation history."}
+            
         # 4. Enforce tactical puzzle bounds
-        # We skip the first 6 half-moves (opening phase) and guarantee 
-        # at least 2 moves remain so there's an active continuation line.
         min_ply = min(6, len(all_moves) - 1)
         max_ply = len(all_moves) - 2
         
@@ -54,9 +51,6 @@ def get_challenge():
             random_ply = len(all_moves) // 2
         else:
             random_ply = random.randint(min_ply, max_ply)
-            
-        if not all_moves:
-            return {"error": "The selected game contains no move notation history."}
 
         # 5. Play out the game logic up to our target split point
         board = game.board()
@@ -65,6 +59,14 @@ def get_challenge():
             
         # Freeze the layout and convert it to FEN string metadata
         puzzle_fen = board.fen()
+        
+        # 5.5 Extract the PREVIOUS move (the one that led to this position)
+        pre_from = None
+        pre_to = None
+        if random_ply > 0:
+            previous_move_obj = all_moves[random_ply - 1]
+            pre_from = chess.square_name(previous_move_obj.from_square) # e.g., "g1"
+            pre_to = chess.square_name(previous_move_obj.to_square)     # e.g., "f3"
         
         # 6. Extract the winning continuation move details
         correct_move_obj = all_moves[random_ply]
@@ -83,6 +85,8 @@ def get_challenge():
             "correctMove": correct_move_san,
             "fromSquare": from_square,
             "toSquare": to_square,
+            "preFrom": pre_from,  # Sent to frontend for highlighting
+            "preTo": pre_to,      # Sent to frontend for highlighting
             "metadata": {
                 "white": white_player,
                 "black": black_player,
@@ -97,4 +101,5 @@ def get_challenge():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    # Changing port back to 5001 if your frontend fetch block hits 5001
+    uvicorn.run("main:app", host="0.0.0.0", port=5001, reload=True)
