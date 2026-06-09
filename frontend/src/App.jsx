@@ -54,7 +54,7 @@ export default function ChessQuiz() {
       setStatus('loading-next-puzzle'); 
       setHighlightedSquare(null);
 
-      const res = await fetch('https://blunder-game.vercel.app/api/get-challenge');
+      const res = await fetch('https://blunder-game.onrender.com/api/get-challenge');
       const data = await res.json(); 
       
       setCurrentChallenge(data);
