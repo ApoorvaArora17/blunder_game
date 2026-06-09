@@ -36,7 +36,7 @@ export default function ChessQuiz() {
       setHighlightedSquare(null);
 
       // Adjust URL to match your server port or proxy setup (e.g., http://localhost:5000)
-      const res = await fetch('http://127.0.0.1:5001/api/get-challenge');
+      const res = await fetch('https://blunder-game.onrender.com/api/get-challenge');
       const data = await res.json(); 
       
       setCurrentChallenge(data);
