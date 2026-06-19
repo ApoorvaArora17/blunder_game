@@ -5,6 +5,7 @@ import chess.pgn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import requests
+import pandas as pd
 import pickle
 
 app = FastAPI()
@@ -17,89 +18,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-with open("june_games_pgn.pkl", "rb") as file:
-    MY_GAMES_LIST = pickle.load(file)
-
+# Read the CSV file
+BLUNDER_DATASET = pd.read_csv('blunder_dataset.csv')
 
 @app.get("/api/get-challenge")
 def get_challenge():
     try:
-        if not MY_GAMES_LIST:
+        # Check if the DataFrame is empty correctly using .empty
+        if BLUNDER_DATASET.empty:
             return {"error": "Your game list is empty."}
             
-        # 1. Grab a completely random raw string from your list
-        raw_pgn_string = random.choice(MY_GAMES_LIST)
+        # Convert rows to a list of dictionaries so random.choice works perfectly
+        records = BLUNDER_DATASET.to_dict(orient='records')
+        random_blunder = random.choice(records)
         
-        # 2. Convert the raw text string into a file-like stream object
-        pgn_stream = io.StringIO(raw_pgn_string)
-        game = chess.pgn.read_game(pgn_stream)
-        
-        if game is None:
-            return {"error": "Failed to parse the chosen PGN string."}
-
-        # 3. Compile the list of main line moves played in this match
-        all_moves = list(game.mainline_moves())
-        
-        if not all_moves:
-            return {"error": "The selected game contains no move notation history."}
-            
-        # 4. Enforce tactical puzzle bounds
-        min_ply = min(6, len(all_moves) - 1)
-        max_ply = len(all_moves) - 2
-        
-        if max_ply < min_ply:
-            random_ply = len(all_moves) // 2
-        else:
-            random_ply = random.randint(min_ply, max_ply)
-
-        # 5. Play out the game logic up to our target split point
-        board = game.board()
-        for i in range(random_ply):
-            board.push(all_moves[i])
-            
-        # Freeze the layout and convert it to FEN string metadata
-        puzzle_fen = board.fen()
-        
-        # 5.5 Extract the PREVIOUS move (the one that led to this position)
-        pre_from = None
-        pre_to = None
-        if random_ply > 0:
-            previous_move_obj = all_moves[random_ply - 1]
-            pre_from = chess.square_name(previous_move_obj.from_square) # e.g., "g1"
-            pre_to = chess.square_name(previous_move_obj.to_square)     # e.g., "f3"
-        
-        # 6. Extract the winning continuation move details
-        correct_move_obj = all_moves[random_ply]
-        correct_move_san = board.san(correct_move_obj) # e.g., "Nxe5", "Qc2+"
-        
-        from_square = chess.square_name(correct_move_obj.from_square) # e.g., "c6"
-        to_square = chess.square_name(correct_move_obj.to_square)     # e.g., "e5"
-        
-        # 7. Collect game header tags for frontend layout details
-        white_player = game.headers.get("White", "White Player")
-        black_player = game.headers.get("Black", "Black Player")
-        event_name = game.headers.get("Event", "Custom Game")
-
+        # Added the vital 'return' keyword here!
         return {
-            "fen": puzzle_fen,
-            "correctMove": correct_move_san,
-            "fromSquare": from_square,
-            "toSquare": to_square,
-            "preFrom": pre_from,  # Sent to frontend for highlighting
-            "preTo": pre_to,      # Sent to frontend for highlighting
-            "metadata": {
-                "white": white_player,
-                "black": black_player,
-                "event": event_name,
-                "moveNumber": (random_ply // 2) + 1
-            }
+            "fenBefore": str(random_blunder.get('fenBefore', '')),
+            "fenAfter": str(random_blunder.get('fenAfter', '')),
+            "blunderMove": str(random_blunder.get('blunderMove', '')),
+            "prevMove": str(random_blunder.get('prevMove', '')),
+            "fromSquare": str(random_blunder.get('fromSquare', '')),
+            "toSquare": str(random_blunder.get('toSquare', '')),
+            "preFrom": str(random_blunder.get('preFrom', '')),
+            "preTo": str(random_blunder.get('preTo', '')),
+            "eval_preFrom": str(random_blunder.get('eval_preFrom', '0.0')),
+            "eval_from": str(random_blunder.get('eval_from', '0.0')),
+            "eval_after": str(random_blunder.get('eval_after', '0.0')),
+            "preFrom_time_white": str(random_blunder.get('preFrom_time_white', "10:00")),
+            "preFrom_time_black": str(random_blunder.get('preFrom_time_black', "10:00")),
+            "from_time_white": str(random_blunder.get('from_time_white', "10:00")),
+            "from_time_black": str(random_blunder.get('from_time_black', "10:00")),
+            "after_time_white": str(random_blunder.get('after_time_white', "10:00")),
+            "after_time_black": str(random_blunder.get('after_time_black', "10:00")),
+            "white_player": str(random_blunder.get('white_player', 'White Player')),
+            "black_player": str(random_blunder.get('black_player', 'Black Player')),
+            "time_class": str(random_blunder.get('time_class', 'blitz'))
         }
         
     except Exception as e:
         print(f"Error structuring puzzle data payload: {e}")
-        return {"error": "An internal parsing step encountered an issue."}
+        return {"error": f"An internal parsing step encountered an issue: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
-    # Changing port back to 5001 if your frontend fetch block hits 5001
     uvicorn.run("main:app", host="0.0.0.0", port=5001, reload=True)
